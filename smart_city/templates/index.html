@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smart City Route Optimization System</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <h1>Smart City Route Optimization System</h1>
+    <p>Shortest paths using Dijkstra's and Bellman-Ford algorithms</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>1. Find a Route</h2>
+      <div class="row">
+        <label>From
+          <select id="source">
+            {% for place in locations %}<option>{{ place }}</option>{% endfor %}
+          </select>
+        </label>
+        <label>To
+          <select id="destination">
+            {% for place in locations %}<option>{{ place }}</option>{% endfor %}
+          </select>
+        </label>
+        <button onclick="findRoute()">Find Route</button>
+      </div>
+      <p id="route-error" class="error"></p>
+      <div id="route-result" class="hidden">
+        <table>
+          <thead><tr><th>Algorithm</th><th>Distance (km)</th><th>Path</th><th>Time (ms)</th></tr></thead>
+          <tbody id="route-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2. Compare Performance</h2>
+      <p>Runs both algorithms on random graphs of increasing size.</p>
+      <button onclick="runBenchmark()">Run Comparison</button>
+      <p id="bench-status"></p>
+      <div id="bench-result" class="hidden">
+        <table>
+          <thead><tr><th>Vertices</th><th>Edges</th><th>Dijkstra (ms)</th><th>Bellman-Ford (ms)</th></tr></thead>
+          <tbody id="bench-body"></tbody>
+        </table>
+        <div id="chart"></div>
+        <div class="legend">
+          <span class="dot d"></span> Dijkstra &nbsp; <span class="dot b"></span> Bellman-Ford
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Complexity</h2>
+      <table>
+        <thead><tr><th></th><th>Dijkstra</th><th>Bellman-Ford</th></tr></thead>
+        <tbody>
+          <tr><td>Time</td><td>O((V + E) log V)</td><td>O(V &times; E)</td></tr>
+          <tr><td>Negative weights</td><td>Not supported</td><td>Supported</td></tr>
+          <tr><td>Approach</td><td>Greedy + priority queue</td><td>Dynamic programming (edge relaxation)</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <script>
+    async function findRoute() {
+      const err = document.getElementById("route-error");
+      err.textContent = "";
+      const res = await fetch("/api/route", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          source: document.getElementById("source").value,
+          destination: document.getElementById("destination").value
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) { err.textContent = data.error; return; }
+      const names = {dijkstra: "Dijkstra", bellman_ford: "Bellman-Ford"};
+      document.getElementById("route-body").innerHTML = Object.keys(names).map(k =>
+        `<tr><td>${names[k]}</td><td>${data[k].distance}</td>
+         <td>${data[k].path.join(" &rarr; ")}</td><td>${data[k].time_ms}</td></tr>`).join("");
+      document.getElementById("route-result").classList.remove("hidden");
+    }
+
+    async function runBenchmark() {
+      document.getElementById("bench-status").textContent = "Running...";
+      const rows = await (await fetch("/api/benchmark")).json();
+      document.getElementById("bench-status").textContent = "";
+      document.getElementById("bench-body").innerHTML = rows.map(r =>
+        `<tr><td>${r.vertices}</td><td>${r.edges}</td>
+         <td>${r.dijkstra_ms}</td><td>${r.bellman_ms}</td></tr>`).join("");
+      const max = Math.max(...rows.map(r => Math.max(r.dijkstra_ms, r.bellman_ms)));
+      document.getElementById("chart").innerHTML = rows.map(r => `
+        <div class="group">
+          <div class="bars">
+            <div class="bar d" style="height:${r.dijkstra_ms / max * 100}%"></div>
+            <div class="bar b" style="height:${r.bellman_ms / max * 100}%"></div>
+          </div>
+          <small>${r.vertices}</small>
+        </div>`).join("");
+      document.getElementById("bench-result").classList.remove("hidden");
+    }
+  </script>
+</body>
+</html>
